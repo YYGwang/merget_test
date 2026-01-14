@@ -188,13 +188,9 @@ async def create_report(
 
         # 4. JSON 형식으로 클라이언트에게 결과 반환 (FastAPI가 자동 변환)
         return {
-            "status": "success",
-            "data": {
                 "creation_date": creation_date,
                 "title": refined_note.title,
-                # "category": refined_note.category,
                 "content": refined_note.refined_text
-            }
         }
 
     except Exception as e:
