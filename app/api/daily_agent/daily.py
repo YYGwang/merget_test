@@ -37,11 +37,11 @@ class MemoRequest(BaseModel):
         return v
 
 class FinalReport(BaseModel):
-    record_date: str = Field(description="작성 날짜 (YYYY-MM-DD)")
+    # record_date: str = Field(description="작성 날짜 (YYYY-MM-DD)")
     title: str = Field(description="내용을 관통하는 핵심 제목")
-    category: Literal["계획", "수업자료", "연구 노트", "회의 스크립트", "일반 메모"] = Field(description="메모의 유형")
+    # category: Literal["계획", "수업자료", "연구 노트", "회의 스크립트", "일반 메모"] = Field(description="메모의 유형")
     refined_text: str = Field(description="유형별 템플릿에 맞춰 문장으로 복원한 본문")
-    todo_list: List[str] = Field(description="추출된 핵심 포인트 및 할 일")
+    # todo_list: List[str] = Field(description="추출된 핵심 포인트 및 할 일")
 
 class AgentState(TypedDict):
     user_request: str
@@ -141,7 +141,7 @@ def test_agent(raw_input: str):
 
 # 테이블 정의
 DRAFT_TABLE = get_table('draft_note')
-CONFIRM_TABLE = get_table('confirm_table')
+CONFIRM_TABLE = get_table('confirm_note')
 
 
 @router.post("/generate-report/{creation_date}")
