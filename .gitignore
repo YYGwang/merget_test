@@ -1,0 +1,8 @@
+**/__pycache__/
+/venv
+.idea/
+.env
+.env.local
+my_project_keypair.pem
+/.github
+
