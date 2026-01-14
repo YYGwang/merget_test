@@ -79,9 +79,9 @@ def reflect_node(state: AgentState):
 
 def generate_report_node(state: AgentState):
     print("[*] Generate... 리포트 문장 복원 및 구조화 중")
-    curr_date = datetime.now().strftime('%Y-%m-%d')
+    # curr_date = datetime.now().strftime('%Y-%m-%d')
     result = structured_llm.invoke([
-        SystemMessage(content=f"{PROMPTS['system_persona']}\n오늘 날짜: {curr_date}"),
+        # SystemMessage(content=f"{PROMPTS['system_persona']}\n오늘 날짜: {curr_date}"),
         HumanMessage(content=state['user_request'])
     ])
     return {"refined_note": result, "iteration_count": 1}
