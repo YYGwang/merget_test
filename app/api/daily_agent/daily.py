@@ -9,7 +9,7 @@ from .graph import app_graph
 router = APIRouter()
 
 # 테이블 정의 변경: history(원본) -> daily(결과 저장)
-HISTORY_TABLE = get_table('draft_table')
+HISTORY_TABLE = get_table('history_table')
 DAILY_TABLE = get_table('daily_table')  # 기존 confirm에서 daily로 변경
 
 
