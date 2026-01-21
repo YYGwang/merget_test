@@ -6,7 +6,9 @@ from app.core.database import get_table
 # 모듈화된 LangGraph 객체 임포트
 from .graph import app_graph
 
-router = APIRouter()
+# app/api/daily_agent/daily.py
+# 기존: router = APIRouter()
+router = APIRouter(prefix="/agent/daily")
 
 # 테이블 정의 변경: history(원본) -> daily(결과 저장)
 HISTORY_TABLE = get_table('history_table')

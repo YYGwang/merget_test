@@ -33,10 +33,8 @@ app.add_middleware(
 )
 
 # 통합된 v1 라우터 등록
-# app.include_router(api_prac_router)
-# app/main.py 수정
-# prefix를 추가하여 요청 주소에 /agent/daily를 포함하도록 합니다.
-app.include_router(api_prac_router, prefix="/agent/daily", tags=["DailyAgent"])
+app.include_router(api_prac_router)
+
 
 @app.get("/")
 async def root():
