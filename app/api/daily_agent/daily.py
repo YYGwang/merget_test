@@ -8,7 +8,7 @@ from .graph import app_graph
 
 # app/api/daily_agent/daily.py
 # 기존: router = APIRouter()
-router = APIRouter(prefix="/agent/daily")
+router = APIRouter()
 
 # 테이블 정의 변경: history(원본) -> daily(결과 저장)
 HISTORY_TABLE = get_table('history_table')
