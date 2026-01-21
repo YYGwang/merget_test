@@ -1,10 +1,9 @@
-from fastapi import APIRouter
-from .daily import router as daily_prac_router
+# app/api/daily_agent/__init__.py
+from .graph import app_graph
+# app/api/daily_agent/__init__.py
 
+# daily.py에 정의된 router를 api_prac_router라는 이름으로 노출시킵니다.
+from .daily import router as api_prac_router
 
-# daily_prac 버전의 모든 라우터를 통합하는 메인 라우터
-api_prac_router = APIRouter()
-
-# 각 모듈에서 정의한 router를 등록
-api_prac_router.include_router(daily_prac_router, prefix="/agent/daily", tags=["daily"])
-
+# 다른 곳에서 이 패키지를 불러올 때 사용할 수 있도록 설정
+__all__ = ["api_prac_router"]
