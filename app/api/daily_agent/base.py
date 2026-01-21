@@ -2,11 +2,16 @@ import json
 from abc import ABC, abstractmethod
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
+from app.core.config import settings
+from dotenv import load_dotenv
 
+load_dotenv()
 class BaseAgent(ABC):
     def __init__(self):
         # 모델 설정 (GPT-4o-mini / watsonx.ai 연동 가능)
-        self.model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        self.model = ChatOpenAI(model="gpt-4o-mini", temperature=0,
+                                openai_api_key=settings.OPENAI_API_KEY  # 이 부분 추가
+                                )
 
     @abstractmethod
     def get_few_shot(self) -> str:
