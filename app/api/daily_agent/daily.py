@@ -51,13 +51,14 @@ async def create_daily_report(
             "content": refined_text
         })
 
-        # 명세서 Response 규격 준수
+
         return {
             "creation_date": current_unix_time,
             "title": refined_title,
-            "content": refined_text,
-            "keyword": []  # 명세서상 옵션 필드
+            "content": refined_text
         }
+            # "keyword": []  # 나도 하라고 했나?
+        # }
 
     except Exception as e:
         print(f"Error: {e}")

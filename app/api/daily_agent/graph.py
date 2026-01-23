@@ -141,7 +141,7 @@ workflow.add_conditional_edges(
     }
 )
 
-# 모든 에이전트에서 검토 노드로 집결 (Fan-in)
+# 모든 에이전트에서 검토 노드로 집결
 for node in ["meeting_agent", "study_agent", "task_agent", "idea_agent", "info_agent"]:
     workflow.add_edge(node, "reflect")
 
@@ -158,3 +158,4 @@ workflow.add_conditional_edges(
 # 5. 컴파일 및 체크포인터 설정
 memory = MemorySaver()
 app_graph = workflow.compile(checkpointer=memory)
+
