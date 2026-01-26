@@ -4,7 +4,6 @@ from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 import re
-from langchain_anthropic import ChatAnthropic
 
 # 각 파일에서 특화 에이전트 클래스 임포트
 from .types.meeting import MeetingAgent
@@ -29,10 +28,7 @@ def cleaner_node(state: GraphState):
     [전처리 노드] LLM을 사용하여 원본의 노이즈를 제거하고 가독성을 높입니다.
     """
     # 전처리 전용 모델 호출 (gpt-4o-mini 활용)
-    model = model = ChatAnthropic(
-        model="claude-3-5-haiku-20241022",
-        temperature=0 # 전처리는 정확성이 생명
-    )
+    model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
     system_prompt = """당신은 지능형 텍스트 정제 전문가입니다. 입력된 텍스트에서 다음 작업을 수행하세요:
     1. 위키 주석(예: [43], [12]) 및 불필요한 특수문자 제거
