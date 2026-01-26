@@ -8,13 +8,14 @@ from app.core.database import get_table
 from .graph import app_graph
 
 router = APIRouter()
+ORIGIN_TABLE = get_table('origin_table')
+PRE_TABLE = get_table('pre_table')
 DAILY_TABLE = get_table('daily_table')
 
 
 # [명세서 반영] Request Body 모델
 class DailyNoteRequest(BaseModel):
     content: str
-
 
 @router.post("")
 async def create_daily_report(
@@ -30,46 +31,50 @@ async def create_daily_report(
         final_state = app_graph.invoke({
             "user_request": request.content,
             "iteration_count": 0,
-            "research_plan": "",
             "reflection_feedback": ""
         }, config)
 
-        # 2. 결과 추출 및 에러 방지 처리
-        # final_state["refined_note"]가 FinalReport 객체인지 확인 후 추출
+        # 2. 결과 데이터 추출
         report_data = final_state.get("refined_note")
+        # 에이전트가 생성한 제목을 모든 테이블의 공통 제목으로 사용합니다.
+        refined_title = final_state.get("title", "제목 없음")
+        refined_text = str(report_data)
 
-        # 만약 report_data가 객체가 아니라 문자열로 넘어올 경우를 대비한 안전장치
-        if hasattr(report_data, 'refined_text'):
-            refined_title = report_data.title
-            refined_text = report_data.refined_text
-        elif isinstance(report_data, dict):
-            refined_title = report_data.get("title", "제목 없음")
-            refined_text = report_data.get("refined_text", "내용 없음")
-        else:
-            # 에러 로그에 찍혔던 상황: report_data가 str일 경우
-            refined_title = refined_title = final_state.get("title", "요약 리포트")
-            refined_text = str(report_data)
-
-        # ---------------------------------------------------------
-        # 3. [명세서 핵심] 새로운 creation_date 생성 (Unix epoch time)
-        # ---------------------------------------------------------
+        # 3. 공통 타임스탬프 생성 (세 테이블 간 연결 고리)
         current_unix_time = int(time.time())
 
-        # 4. [daily_table] 저장 (이미지 스키마 준수)
-        # key: user_key(string), creation_date(number), title(string), content(string)
-        item_to_store = {
-            "user_key": uid,  # user의 uid
-            "creation_date": current_unix_time,  # 최초 생성 시간 (초 단위)
-            "title": refined_title,  # 제목 (주제)
-            "content": refined_text  # 정리된 본문
-        }
+        # ---------------------------------------------------------
+        # 4. [Origin Table] 순수 원본 저장 (제목 추가)
+        # ---------------------------------------------------------
+        ORIGIN_TABLE.put_item(Item={
+            "user_key": uid,
+            "creation_date": current_unix_time,
+            "content": request.content
+        })
 
+        # ---------------------------------------------------------
+        # 5. [Pre Table] 정제된 전처리본 저장 (제목 추가)
+        # ---------------------------------------------------------
+        PRE_TABLE.put_item(Item={
+            "user_key": uid,
+            "creation_date": current_unix_time,
+            "title": refined_title,  # 공통 제목 추가
+            "content": final_state.get("preprocessed_request", request.content)
+        })
+
+        # ---------------------------------------------------------
+        # 6. [Daily Table] 최종 정리본 저장
+        # ---------------------------------------------------------
+        item_to_store = {
+            "user_key": uid,
+            "creation_date": current_unix_time,
+            "title": refined_title,
+            "content": refined_text
+        }
         DAILY_TABLE.put_item(Item=item_to_store)
 
-        # 5. 결과 반환 (프론트엔드 전달용)
         return item_to_store
 
     except Exception as e:
         print(f"Error details: {e}")
-        # 구체적인 에러 메시지를 detail에 담아 보냅니다.
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")

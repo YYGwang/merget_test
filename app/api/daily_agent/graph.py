@@ -4,6 +4,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 import re
+from langchain_anthropic import ChatAnthropic
 
 # 각 파일에서 특화 에이전트 클래스 임포트
 from .types.meeting import MeetingAgent
@@ -15,19 +16,43 @@ from .types.info import InfoAgent
 
 # 1. 그래프 상태 정의
 class GraphState(TypedDict):
-    user_request: str
+    user_request: str           # 사용자가 보낸 순수 원본 텍스트
+    preprocessed_request: str   # cleaner_node를 통해 정제된 텍스트 [새로 추가]
     category: Literal["meeting", "study", "task", "idea", "info"]
     refined_note: str
     title: str
     user_decision: str
 
 
-# 2. 노드 함수 정의
-
 def cleaner_node(state: GraphState):
-    """전처리 노드: 공백 제거 및 기본적인 텍스트 정제"""
-    return {"user_request": state["user_request"].strip()}
+    """
+    [전처리 노드] LLM을 사용하여 원본의 노이즈를 제거하고 가독성을 높입니다.
+    """
+    # 전처리 전용 모델 호출 (gpt-4o-mini 활용)
+    model = model = ChatAnthropic(
+        model="claude-3-5-haiku-20241022",
+        temperature=0 # 전처리는 정확성이 생명
+    )
 
+    system_prompt = """당신은 지능형 텍스트 정제 전문가입니다. 입력된 텍스트에서 다음 작업을 수행하세요:
+    1. 위키 주석(예: [43], [12]) 및 불필요한 특수문자 제거
+    2. 명백한 오타 수정 및 맞춤법 교정 (예: 3도움불과 -> 3도움에 불과)
+    3. 거친 구어체나 커뮤니티 용어를 정갈한 문어체로 윤문 (예: 때려 박으며 -> 기록하며)
+    4. 핵심 정보와 사실 관계는 절대 왜곡하지 말 것
+
+    출력 형식: 정제된 텍스트 내용만 출력하세요."""
+
+    response = model.invoke([
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=state["user_request"])
+    ])
+
+    cleaned_text = response.content.strip()
+
+    # 전처리된 결과를 상태에 저장하여 다음 노드와 daily.py로 전달
+    return {
+        "preprocessed_request": cleaned_text
+    }
 
 def router_node(state: GraphState):
     """
@@ -88,17 +113,26 @@ def info_node(state: GraphState):
 def reflect_node(state: GraphState):
     refined_note = state.get("refined_note", "")
 
-    # 1. 정보 누락 체크
+    # 1. 검수 로직 (기존 유지)
     if len(state["user_request"]) > 20 and len(refined_note) < 5:
         return {"user_decision": "retry"}
 
-    # 2. 이모지 정제
+    # 2. 이모지 정제 및 승인 결정
     emoji_pattern = re.compile("[" u"\U00010000-\U0010FFFF" "]+", flags=re.UNICODE)
     if emoji_pattern.search(refined_note):
-        cleaned_note = emoji_pattern.sub(r'', refined_note)
-        return {"refined_note": cleaned_note, "user_decision": "approve"}
+        refined_note = emoji_pattern.sub(r'', refined_note)
 
-    return {"user_decision": "approve"}
+    # 3. [핵심] 승인 시점에 세 개의 테이블에 저장
+    # user_decision을 approve로 넘기기 전에 DB 작업을 수행합니다.
+
+    # 예시 코드 (실제 구현 시 테이블 객체 임포트 필요)
+    # creation_date = int(time.time())
+
+    # ORIGIN_TABLE.put_item(Item={"user_key": uid, "content": state["user_request"], "date": creation_date})
+    # PRE_TABLE.put_item(Item={"user_key": uid, "content": state["user_request"].strip(), "date": creation_date})
+    # DAILY_TABLE.put_item(Item={"user_key": uid, "content": refined_note, "title": state["title"], "date": creation_date})
+
+    return {"refined_note": refined_note, "user_decision": "approve"}
 
 
 # 3. 그래프 구성 및 엣지 연결
