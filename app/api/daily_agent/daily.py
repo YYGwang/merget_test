@@ -47,7 +47,7 @@ async def create_daily_report(
             refined_text = report_data.get("refined_text", "내용 없음")
         else:
             # 에러 로그에 찍혔던 상황: report_data가 str일 경우
-            refined_title = "요약 리포트"
+            refined_title = refined_title = final_state.get("title", "요약 리포트")
             refined_text = str(report_data)
 
         # ---------------------------------------------------------
