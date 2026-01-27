@@ -59,6 +59,7 @@ async def create_daily_report(
             "creation_date": current_unix_time,
             "title": refined_title,
             "content": final_state.get("preprocessed_request", request.content)
+
         })
 
         # 6. [Daily Table] 최종 정리본 저장
@@ -68,6 +69,7 @@ async def create_daily_report(
             "title": refined_title,
             "content": refined_text,
             "keywords": extracted_keywords
+
         }
         DAILY_TABLE.put_item(Item=item_to_store)
 
