@@ -20,6 +20,7 @@ class GraphState(TypedDict):
     category: Literal["meeting", "study", "task", "idea", "info"]
     refined_note: str
     title: str
+    keywords: list[str]
     user_decision: str
 
 
@@ -28,10 +29,10 @@ def cleaner_node(state: GraphState):
     [전처리 노드] LLM을 사용하여 원본의 노이즈를 제거하고 가독성을 높입니다.
     """
     # 전처리 전용 모델 호출 (gpt-4o-mini 활용)
-    model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    model = ChatOpenAI(model="gpt-3.5-turbo-16k", temperature=0)
 
     system_prompt = """당신은 지능형 텍스트 정제 전문가입니다. 입력된 텍스트에서 다음 작업을 수행하세요:
-    1. 위키 주석(예: [43], [12]) 및 불필요한 특수문자 제거
+    1. 주석(예: [43], [12]) 및 불필요한 특수문자 제거
     2. 명백한 오타 수정 및 맞춤법 교정 (예: 3도움불과 -> 3도움에 불과)
     3. 거친 구어체나 커뮤니티 용어를 정갈한 문어체로 윤문 (예: 때려 박으며 -> 기록하며)
     4. 핵심 정보와 사실 관계는 절대 왜곡하지 말 것
@@ -54,7 +55,7 @@ def router_node(state: GraphState):
     """
     [테스트 모드] 무조건 'study' 카테고리를 반환하도록 고정합니다.
     """
-    model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    model = ChatOpenAI(model="gpt-3.5-turbo-16k", temperature=0)
 
     system_prompt = """당신은 메모 분류 전문가입니다. 사용자의 입력을 분석하여 반드시 아래 5개 카테고리 중 하나만 선택하여 단어로 답변하세요.
 
@@ -80,56 +81,76 @@ def router_node(state: GraphState):
 
 # --- 5개 특화 에이전트 노드 ---
 
+# --- 5개 특화 에이전트 노드 수정 ---
+
 def meeting_node(state: GraphState):
-    result = MeetingAgent().organize(state["user_request"])
-    return {"title": result.get("title", "제목 없음"), "refined_note": result.get("content", "정리 실패")}
+    # 전처리된 텍스트(preprocessed_request)를 사용하도록 변경
+    result = MeetingAgent().organize(state.get("preprocessed_request", state["user_request"]))
+    return {
+        "title": result.get("title", "제목 없음"),
+        "refined_note": result.get("content", "정리 실패"),
+        "keywords": result.get("keywords", []) # 키워드 추가
+    }
 
 
 def study_node(state: GraphState):
-    result = StudyAgent().organize(state["user_request"])
-    return {"title": result.get("title", "제목 없음"), "refined_note": result.get("content", "정리 실패")}
+    result = StudyAgent().organize(state.get("preprocessed_request", state["user_request"]))
+    return {
+        "title": result.get("title", "제목 없음"),
+        "refined_note": result.get("content", "정리 실패"),
+        "keywords": result.get("keywords", []) # 이미 잘 들어있지만 전처리 데이터 활용으로 보강
+    }
 
 
 def task_node(state: GraphState):
-    result = TaskAgent().organize(state["user_request"])
-    return {"title": result.get("title", "제목 없음"), "refined_note": result.get("content", "정리 실패")}
+    result = TaskAgent().organize(state.get("preprocessed_request", state["user_request"]))
+    return {
+        "title": result.get("title", "제목 없음"),
+        "refined_note": result.get("content", "정리 실패"),
+        "keywords": result.get("keywords", []) # 키워드 추가
+    }
 
 
 def idea_node(state: GraphState):
-    result = IdeaAgent().organize(state["user_request"])
-    return {"title": result.get("title", "제목 없음"), "refined_note": result.get("content", "정리 실패")}
+    result = IdeaAgent().organize(state.get("preprocessed_request", state["user_request"]))
+    return {
+        "title": result.get("title", "제목 없음"),
+        "refined_note": result.get("content", "정리 실패"),
+        "keywords": result.get("keywords", []) # 키워드 추가
+    }
 
 
 def info_node(state: GraphState):
-    result = InfoAgent().organize(state["user_request"])
-    return {"title": result.get("title", "제목 없음"), "refined_note": result.get("content", "정리 실패")}
-
+    result = InfoAgent().organize(state.get("preprocessed_request", state["user_request"]))
+    return {
+        "title": result.get("title", "제목 없음"),
+        "refined_note": result.get("content", "정리 실패"),
+        "keywords": result.get("keywords", []) # 키워드 추가
+    }
 
 # --- 검수 노드 ---
 def reflect_node(state: GraphState):
     refined_note = state.get("refined_note", "")
+    title = state.get("title", "제목 없음") # 이전 노드에서 생성한 제목 가져오기
+    keywords = state.get("keywords", [])    # 이전 노드에서 생성한 키워드 가져오기
 
     # 1. 검수 로직 (기존 유지)
     if len(state["user_request"]) > 20 and len(refined_note) < 5:
         return {"user_decision": "retry"}
 
-    # 2. 이모지 정제 및 승인 결정
+    # 2. 이모지 정제
     emoji_pattern = re.compile("[" u"\U00010000-\U0010FFFF" "]+", flags=re.UNICODE)
     if emoji_pattern.search(refined_note):
         refined_note = emoji_pattern.sub(r'', refined_note)
 
-    # 3. [핵심] 승인 시점에 세 개의 테이블에 저장
-    # user_decision을 approve로 넘기기 전에 DB 작업을 수행합니다.
-
-    # 예시 코드 (실제 구현 시 테이블 객체 임포트 필요)
-    # creation_date = int(time.time())
-
-    # ORIGIN_TABLE.put_item(Item={"user_key": uid, "content": state["user_request"], "date": creation_date})
-    # PRE_TABLE.put_item(Item={"user_key": uid, "content": state["user_request"].strip(), "date": creation_date})
-    # DAILY_TABLE.put_item(Item={"user_key": uid, "content": refined_note, "title": state["title"], "date": creation_date})
-
-    return {"refined_note": refined_note, "user_decision": "approve"}
-
+    # 3. 데이터 유지 및 승인 반환
+    # 여기서 title과 keywords를 다시 return 해주어야 상태가 끝까지 유지됩니다.
+    return {
+        "refined_note": refined_note,
+        "title": title,
+        "keywords": keywords,
+        "user_decision": "approve"
+    }
 
 # 3. 그래프 구성 및 엣지 연결
 
