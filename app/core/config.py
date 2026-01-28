@@ -11,9 +11,6 @@ class Settings(BaseSettings):
     USER_POOL_ID: str
     APP_CLIENT_ID: str
 
-    WATSONX_URL: str
-    WATSONX_APIKEY: str
-    WATSONX_PROJECT_ID: str
 
 
 
