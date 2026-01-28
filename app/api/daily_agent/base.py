@@ -15,12 +15,10 @@ load_dotenv()
 class BaseAgent(ABC):
     def __init__(self):
         self.model = ChatOpenAI(
-            model="/app/model",                      # 서버에서 요구하는 model 값
+            model="gpt-4o-mini",
             temperature=0,
-            api_key="token-is-ignored",              # 서버가 무시해도 LangChain 쪽에서 빈 값은 싫어함
-            base_url="http://52.79.240.222:8000/v1", # ★ OpenAI SDK 예시의 base_url 그대로
+            openai_api_key=settings.OPENAI_API_KEY
         )
-
     @abstractmethod
     def get_instruction(self) -> str:
         """노드별 특화된 상세 지침(Prompt)을 정의합니다."""
@@ -272,6 +270,8 @@ class BaseAgent(ABC):
 - 검색/분류에 도움이 되는 단어만 포함하세요.
 - 최소 1개 이상 반드시 생성하세요.
 - SHORT MODE에서는 입력에 있는 단어만 사용하세요.
+- 절대 형용사, 동사, 부사는 사용하지 마세요.
+- 명사만 사용하시오
 
 [금지 사항]
 - 단순 요약, 문단 압축, 원문 나열은 금지합니다.
