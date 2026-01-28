@@ -113,40 +113,28 @@ class BaseAgent(ABC):
 
         return title or "제목 미기재"
 
-    def _make_summary_from_content(self, content: str, max_lines: int = 3) -> str:
+    def _make_summary_from_content(self, content: str, max_sentences: int = 3) -> str:
         """
         non-short에서 요약이 누락된 경우에만 사용.
-        본문의 상위 번호(1.,2.,3.) 제목을 최대 3개까지 추출해 요약으로 만든다.
-        (새로운 사실 생성 금지)
+        본문의 상위 헤더(1., 2., 3.)를 문장으로 이어
+        최대 3문장 요약을 만든다. (생성 최소화)
         """
-        lines = (content or "").splitlines()
-
-        heads: list[str] = []
-        for line in lines:
+        heads = []
+        for line in (content or "").splitlines():
             s = line.strip()
             m = re.match(r"^(\d+)\.\s+(.+)$", s)
             if m:
-                head = m.group(2).strip()
-                if head:
-                    heads.append(head)
-            if len(heads) >= max_lines:
+                heads.append(m.group(2).strip())
+            if len(heads) >= max_sentences:
                 break
 
         if not heads:
-            # fallback: 1-1.이라도 있으면 사용
-            for line in lines:
-                s = line.strip()
-                if re.match(r"^1(\-\d+)?\.\s+", s):
-                    head = re.sub(r"^1(\-\d+)?\.\s+", "", s).strip()
-                    if head:
-                        heads = [head]
-                    break
+            return "요약: 메모를 구조화하여 정리했다."
 
-        if not heads:
-            return "요약:\n- 메모 정리"
-
-        bullet = "\n".join([f"- {h}" for h in heads])
-        return f"요약:\n{bullet}"
+        # 문장으로 변환
+        sentences = [f"{h}." if not h.endswith(".") else h for h in heads]
+        summary_text = " ".join(sentences[:max_sentences])
+        return f"요약: {summary_text}"
 
     def _postprocess(self, data: dict, original: str, is_short: bool) -> dict:
         """
@@ -170,9 +158,8 @@ class BaseAgent(ABC):
 
         # non-short일 때만 요약 강제. short_memo(is_short=True)면 요약 안 함.
         if (not is_short) and content:
-            lead = content.lstrip()
-            if not (lead.startswith("요약") or lead.startswith("요 약")):
-                summary = self._make_summary_from_content(content, max_lines=3)
+            if not content.lstrip().startswith("요약:"):
+                summary = self._make_summary_from_content(content, max_sentences=3)
                 content = f"{summary}\n\n{content}"
 
             # 요약이 너무 길어지지 않게 상한(안전장치)
@@ -230,16 +217,14 @@ class BaseAgent(ABC):
         if not is_short:
             summary_rules = """
 [요약 규칙]
-- content의 맨 앞에 '요약' 섹션을 먼저 작성하세요.
-- 요약은 1~3줄(또는 1~3개 항목)까지만 허용합니다.
-- 요약은 본문에 작성한 내용을 바탕으로만 작성하세요. (입력에 없는 사실/의도 추가 금지)
-- 요약에 목적/의도 단어(계획/전략/로드맵/가이드/보고서)를 새로 넣지 마세요.
-- 요약 이후 빈 줄 1줄을 넣고, 그 다음부터 번호 기반 구조(1., 1-1.)로 본문을 작성하세요.
+- content의 맨 앞에 '요약:'으로 시작하는 요약 문단을 작성하세요.
+- 요약은 최대 3문장까지만 허용합니다.
+- 줄바꿈은 허용하되, bullet/번호/목록 형태는 사용하지 마세요.
+- 요약은 본문에 작성한 내용을 바탕으로만 작성하세요.
+- 입력에 없는 목적/의도 단어(계획/전략/로드맵/가이드/보고서 등)를 추가하지 마세요.
 
 [요약 형식 예시]
-요약:
-- ...
-- ...
+요약: 첫 번째 요약 문장입니다. 두 번째 요약 문장입니다.
 """
 
         system_prompt = f"""당신은 파편화된 메모를 단순 요약하는 사람이 아니라,
