@@ -7,6 +7,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 
 from app.core.config import settings
+from langchain_openai import ChatOpenAI
 
 load_dotenv()
 
@@ -14,9 +15,10 @@ load_dotenv()
 class BaseAgent(ABC):
     def __init__(self):
         self.model = ChatOpenAI(
-            model="gpt-4o-mini",
+            model="/app/model",                      # 서버에서 요구하는 model 값
             temperature=0,
-            openai_api_key=settings.OPENAI_API_KEY
+            api_key="token-is-ignored",              # 서버가 무시해도 LangChain 쪽에서 빈 값은 싫어함
+            base_url="http://52.79.240.222:8000/v1", # ★ OpenAI SDK 예시의 base_url 그대로
         )
 
     @abstractmethod

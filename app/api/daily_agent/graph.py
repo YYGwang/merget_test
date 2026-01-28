@@ -4,6 +4,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 import re
+# from langchain_community.document_loaders import PDFPlumberLoader
 
 # ✅ 4개 특화 에이전트 클래스 임포트 (네 구조 기준)
 from .types.meeting import MeetingAgent
@@ -15,7 +16,7 @@ from .types.memo import MemoAgent
 # -----------------------------
 # 1) Graph State
 # -----------------------------
-class GraphState(TypedDict):
+class GraphState(TypedDict, total=False):
     user_request: str                  # 사용자가 보낸 원본 텍스트
     preprocessed_request: str          # cleaner_node로 정제된 텍스트
     category: Literal["note", "meeting", "planner", "memo"]
@@ -24,6 +25,8 @@ class GraphState(TypedDict):
     title: str
     keywords: list[str]
     user_decision: str
+    pdf_path: str
+    input_type: Literal["text", "pdf"]
 
 
 # -----------------------------
