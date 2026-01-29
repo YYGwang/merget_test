@@ -202,74 +202,176 @@ def _fallback_keywords(text: str, max_k: int = 8) -> list[str]:
             break
     return out
 
-def reflect_node(state: GraphState):
-    refined_note = state.get("refined_note", "") or ""
-    title = state.get("title", "제목 없음") or "제목 없음"
-    keywords = state.get("keywords", []) or []
-    src = state.get("preprocessed_request") or state.get("user_request", "")
-    is_short = bool(state.get("is_short", False))
-    category = state.get("category", "memo")
+import re
+from typing import Any
 
-    # (1) 아주 약한 기존 검수: 입력이 충분히 긴데 결과가 비면 재시도
-    if len(state.get("user_request", "")) > 20 and len(refined_note.strip()) < 5:
+def reflect_node(state: "GraphState"):
+    """
+    Reflect 노드 (최종 승인 버전)
+    역할:
+    - (1) 아주 약한 검수: 입력이 충분히 긴데 결과가 거의 비면 retry
+    - (2) 이모지 제거
+    - (3) keywords: '명사처럼 보이는 것'만 남기고 나머지 제거 (채우지 않음 / fallback 금지)
+    - (4) SHORT MODE 과확장 방지: 원문 대비 과도하게 길면 안전 포맷으로 보정
+      - 하위 번호(1-1 등) 금지, '-' 불릿만 사용
+    """
+
+    refined_note = (state.get("refined_note", "") or "").strip()
+    title = (state.get("title", "제목 없음") or "제목 없음").strip()
+    keywords = state.get("keywords", []) or []
+    src = (state.get("preprocessed_request") or state.get("user_request", "") or "").strip()
+    is_short = bool(state.get("is_short", False))
+    category = (state.get("category", "memo") or "memo").strip()
+
+    # -------------------------
+    # Helpers
+    # -------------------------
+    def remove_emoji(text: str) -> str:
+        if not text:
+            return text
+        # wide unicode range emoji 제거(과하게 잡아도 reflect 목적에 부합)
+        emoji_pattern = re.compile("[" u"\U00010000-\U0010FFFF" "]+", flags=re.UNICODE)
+        return emoji_pattern.sub("", text)
+
+    def filter_noun_keywords(keys: list[Any]) -> list[str]:
+        """
+        명사처럼 보이지 않는 키워드를 전부 제거.
+        - 여기서는 '삭제만' 수행 (없으면 그냥 [])
+        - 조사/어미/서술형/활용형/의미없는 일반어 제거
+        """
+        if not keys:
+            return []
+
+        banned_suffixes = (
+            # 서술/활용형에 자주 붙는 꼬리(보수적으로 제거)
+            "하다", "되다", "있다", "없다",
+            "합니다", "했습니다", "같습니다", "됩니다",
+            "하기", "하기를", "하기에",
+            "하는", "한", "할",
+            # 조사/격조사/접속/보조
+            "으로", "로", "에서", "에게", "께", "보다",
+            "은", "는", "이", "가", "을", "를", "의", "와", "과", "도", "만",
+        )
+
+        # 검색 가치가 낮은 일반어(원하면 여기 더 늘리면 됨)
+        stopwords = {
+            "것", "수", "때", "경우", "부분",
+            "내용", "기능", "문제", "방안",
+            "정도", "사용", "관련", "제안",
+        }
+
+        out: list[str] = []
+        seen = set()
+
+        for k in keys:
+            if not isinstance(k, str):
+                continue
+            k = k.strip()
+            if len(k) < 2:
+                continue
+
+            # 끝이 조사/어미/서술형이면 제거
+            if k.endswith(banned_suffixes):
+                continue
+
+            # 일반 불용어 제거
+            if k in stopwords:
+                continue
+
+            # 너무 일반적인 숫자/기호 위주 제거(필요시 강화)
+            if re.fullmatch(r"[\d\W_]+", k):
+                continue
+
+            if k in seen:
+                continue
+            seen.add(k)
+            out.append(k)
+
+        return out
+
+    def safe_short_format(category_: str, src_: str) -> str:
+        """
+        SHORT MODE 보정용 최소 포맷 (확장 최소 / 하위 번호 금지)
+        - 상위는 1. 한 줄
+        - 하위는 '-' 불릿만
+        """
+        src_line = src_ if src_ else "미기재"
+
+        if category_ == "meeting":
+            return (
+                "## 회의 개요\n"
+                "- 일시: 미기재\n"
+                "- 참석자: 미기재\n"
+                "- 주제/안건: 미기재\n\n"
+                "## 논의 내용\n"
+                "1. 입력 기반\n"
+                f"- {src_line}\n\n"
+                "## 결정사항\n"
+                "- 미기재\n\n"
+                "## 액션 아이템\n"
+                "- 미기재\n"
+            )
+
+        if category_ == "planner":
+            return (
+                "## 할 일\n"
+                "1. 입력 기반\n"
+                f"- {src_line}\n\n"
+                "## 비고\n"
+                "- 미기재\n"
+            )
+
+        if category_ == "note":
+            return (
+                "## 핵심\n"
+                "1. 입력 기반\n"
+                f"- {src_line}\n\n"
+                "## 추가로 적으면 좋은 것\n"
+                "- 관련 맥락/출처/예시(있다면)\n"
+            )
+
+        # memo/default
+        return (
+            "1. 입력 기반\n"
+            f"- {src_line}\n"
+        )
+
+    # -------------------------
+    # (1) 아주 약한 기존 검수: 입력이 충분히 긴데 결과가 비면 retry
+    # -------------------------
+    user_req = (state.get("user_request", "") or "")
+    if len(user_req) > 20 and len(refined_note) < 5:
         return {"user_decision": "retry"}
 
+    # -------------------------
     # (2) 이모지 제거
-    emoji_pattern = re.compile("[" u"\U00010000-\U0010FFFF" "]+", flags=re.UNICODE)
-    refined_note = emoji_pattern.sub(r'', refined_note)
+    # -------------------------
+    refined_note = remove_emoji(refined_note)
+    title = remove_emoji(title)
 
-    # (3) 키워드 비면 보강
-    if not keywords:
-        keywords = _fallback_keywords(src, max_k=8)
+    # -------------------------
+    # (3) keywords: 명사만 남기고, 비면 그대로 []
+    #     - fallback으로 채우지 않음
+    # -------------------------
+    keywords = filter_noun_keywords(keywords)
 
-    # (4) SHORT MODE 과확장 방지: 결과가 원문 대비 너무 길면 안전 포맷으로 축약
-    # - retry 대신 '보정' 선택 (안정성 목적)
+    # -------------------------
+    # (4) SHORT MODE 과확장 방지: 결과가 원문 대비 너무 길면 안전 포맷으로 보정
+    # -------------------------
     if is_short:
-        # 경험치: short에서는 원문 대비 3배 이상이 나오면 확장 가능성이 큼
+        # 경험칙: short에서 원문 대비 과도하게 길면 확장으로 간주
+        # - refined_note가 아주 길어지는 케이스 방어
         if len(refined_note) > max(500, 3 * len(src)):
-            if category == "meeting":
-                refined_note = (
-                    "## 회의 개요\n"
-                    "- 일시: 미기재\n"
-                    "- 참석자: 미기재\n"
-                    "- 주제/안건: 미기재\n\n"
-                    "## 논의 내용\n"
-                    f"1. 입력 기반\n  1-1. {src}\n\n"
-                    "## 결정사항\n"
-                    "1. 미기재\n\n"
-                    "## 액션 아이템\n"
-                    "1. 미기재\n"
-                )
-            elif category == "planner":
-                refined_note = (
-                    "## Planner\n"
-                    "1. 할 일 목록\n"
-                    f"  1-1. {src}\n"
-                    "    - 기한: 미기재\n"
-                    "    - 우선순위: 미기재\n\n"
-                    "2. 비고\n"
-                    "1. 미기재\n"
-                )
-            elif category == "note":
-                refined_note = (
-                    "## 핵심\n"
-                    f"1. {src}\n\n"
-                    "## 상세 노트\n"
-                    f"1. 입력 기반\n  1-1. {src}\n\n"
-                    "## 추가로 적으면 좋은 것\n"
-                    "1. 관련 맥락/출처/예시(있다면)\n"
-                )
-            else:
-                refined_note = f"1. 입력 기반\n  1-1. {src}\n"
+            refined_note = safe_short_format(category, src)
 
-            # title도 너무 길면 짧게
-            if len(title) > 60:
-                title = title[:60] + "…"
+        # title도 너무 길면 컷
+        if len(title) > 60:
+            title = title[:60] + "…"
 
     return {
         "refined_note": refined_note,
-        "title": title,
-        "keywords": keywords,
+        "title": title or "제목 없음",
+        "keywords": keywords,  # 비어도 그대로 []
         "user_decision": "approve",
     }
 

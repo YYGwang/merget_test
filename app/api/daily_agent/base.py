@@ -54,26 +54,60 @@ class BaseAgent(ABC):
 
     def _fallback_keywords(self, content: str, max_k: int = 8) -> list[str]:
         """
-        keywords가 비거나 파싱 실패 시 입력에서 키워드를 러프하게 추출합니다.
-        - 한글 2글자 이상 / 영숫자 토큰 추출
-        - 중복 제거 (순서 유지)
+        명사 전용 fallback 키워드 추출
+        - 한글 명사 느낌만 허용
+        - 조사/어미/동사/형용사 전부 제거
+        - 의미 없는 일반어 제거
         """
         if not content:
             return []
 
+        # 1) 토큰 후보 (한글 2글자 이상 + 영문/숫자)
         tokens = re.findall(r"[A-Za-z0-9_]+|[가-힣]{2,}", content)
+
+        # 2) 제거할 패턴들 (❗핵심)
+        banned_suffixes = (
+            "합니다", "했습니다", "같습니다", "됩니다", "이다", "있다", "없다",
+            "하기", "하기를", "하기에",
+            "하는", "한", "할",
+            "으로", "로", "에서", "에게", "께", "보다",
+            "은", "는", "이", "가", "을", "를", "의", "와", "과", "도", "만"
+        )
+
+        # 의미 없는 일반 명사(검색가치 없음)
+        stopwords = {
+            "것", "수", "때", "경우", "부분", "관련", "기능", "내용",
+            "문제", "방안", "제안", "정도", "사용"
+        }
+
         seen = set()
         out: list[str] = []
+
         for t in tokens:
             t = t.strip()
+
+            # 길이 컷
             if len(t) < 2:
                 continue
+
+            # 조사/어미/동사형 컷
+            if t.endswith(banned_suffixes):
+                continue
+
+            # 불용 명사 컷
+            if t in stopwords:
+                continue
+
+            # 중복 컷
             if t in seen:
                 continue
+
             seen.add(t)
             out.append(t)
+
             if len(out) >= max_k:
                 break
+
         return out
 
     def _sanitize_title(self, title: str, original: str, is_short: bool) -> str:
@@ -136,6 +170,33 @@ class BaseAgent(ABC):
         summary_text = " ".join(sentences[:max_sentences])
         return f"요약: {summary_text}"
 
+    def _normalize_md_hierarchy(self, text: str) -> str:
+        """
+        Markdown 정리:
+        - 1-1., 2-3. 같은 하위 번호를 '-' 불릿으로 변환
+        - 상위 번호(1., 2.)는 유지
+        """
+        if not text:
+            return text
+
+        # 하위 번호 (1-1., 2-3., 10-2. 등) → '-'
+        text = re.sub(
+            r"(?m)^\s*\d+-\d+\.\s+",
+            "- ",
+            text
+        )
+
+        # 혹시 줄 중간에 끼어든 경우도 커버
+        text = re.sub(
+            r"\s+\d+-\d+\.\s+",
+            "\n- ",
+            text
+        )
+
+        # 정리
+        text = re.sub(r"\n{3,}", "\n\n", text)
+        return text.strip()
+
     def _postprocess(self, data: dict, original: str, is_short: bool) -> dict:
         """
         모델 출력 후 최소 방어:
@@ -152,7 +213,7 @@ class BaseAgent(ABC):
         keywords = data.get("keywords") if isinstance(data.get("keywords"), list) else []
 
         if not keywords:
-            keywords = self._fallback_keywords(original, max_k=8)
+            keywords = []
 
         title = self._sanitize_title(title, original=original, is_short=is_short)
 
@@ -243,14 +304,13 @@ class BaseAgent(ABC):
 - 단, 입력에 없는 정보를 새로 만들어내지 마세요. (추측/상상 금지)
 
 [구조화 규칙 — 최우선]
-1. 본문(content)은 반드시 번호 기반 계층 구조를 사용해야 합니다.
-   - 예: 1., 1-1., 1-2., 2., 2-1.
-2. 하나의 번호에는 하나의 주제만 포함하세요.
-3. 상위 번호는 "개념/주제", 하위 번호는 "설명/근거/세부 내용" 역할을 가져야 합니다.
-4. 번호 없는 문단 출력은 금지합니다.
-5. 각 번호 항목은 정확히 한 줄(1 line)로 작성합니다. (한 번호에 여러 문장/여러 줄 금지)
-6. 번호 항목들 사이에는 줄바꿈을 반드시 포함합니다. (공백으로 이어붙이기 금지)
-7. "1." 아래에 "1-1."이 올 때도 반드시 줄바꿈을 사용합니다.
+1. 상위 주제만 번호(1., 2., 3.)를 사용하세요.
+2. 하위 항목에는 번호(1-1., 1-2., 2-1. 등)를 절대 사용하지 마세요.
+3. 하위 항목은 반드시 Markdown 불릿("- ")으로 작성하세요.
+4. 하나의 상위 번호 아래에는 여러 개의 "-" 항목이 올 수 있습니다.
+5. 같은 줄에 두 개 이상의 항목을 작성하지 마세요.
+6. 모든 항목은 반드시 새 줄에서 시작해야 합니다.
+
 
 [재구성 규칙]
 - 단편적인 문장은 맥락에 맞게 재배치하세요.
