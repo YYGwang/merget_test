@@ -4,7 +4,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 import re
-# from langchain_community.document_loaders import PDFPlumberLoader
+
 
 # ✅ 4개 특화 에이전트 클래스 임포트 (네 구조 기준)
 from .types.meeting import MeetingAgent
@@ -88,7 +88,7 @@ def cleaner_node(state: GraphState):
 - 입력에 없는 정보 생성
 
 [출력 규칙]
-- 정제된 텍스트 본문만 출력하세요.
+# - 정제된 텍스트 본문만 출력하세요.
 - 제목, 번호, 불릿, 설명 문구를 추가하지 마세요.
 - 원문이 단문이면 단문 형태를 유지하세요."""
 
