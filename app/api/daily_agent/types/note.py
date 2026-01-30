@@ -36,12 +36,13 @@ class NoteAgent(BaseAgent):
 
     def get_template(self) -> str:
         return """
-## 핵심
-1. {핵심 포인트}
-- {세부 설명}
 
 ## 상세 노트
 1. {정리 항목}
-- {세부 내용}
+  - {세부 내용}
+2. {정리 항목}
+  - {세부 내용}
+...
+
 
 """
