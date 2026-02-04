@@ -34,8 +34,7 @@ class NoteAgent(BaseAgent):
 [출력 예시]
 {
   "title": "JWT 만료 처리와 Refresh Token 관련 메모",
-  "content": "1. JWT 만료 처리\n(1) 혼동 지점\n- JWT 만료 처리 헷갈림\n- access token 만료 시 재발급 흐름 정리 필요\n\n2. Refresh Token\n(1) 필요 이유\n- refresh token 필요 이유 정리해야 함\n\n(2) 구현/저장 관련\n- refresh token 저장 위치도 고민\n",
-  "keywords": ["JWT", "만료", "Refresh Token", "Access Token"]
+  "content": "1. JWT 만료 처리\n(1) 혼동 지점\n- JWT 만료 처리 헷갈림\n- access token 만료 시 재발급 흐름 정리 필요\n\n2. Refresh Token\n(1) 필요 이유\n- refresh token 필요 이유 정리해야 함\n\n(2) 구현/저장 관련\n- refresh token 저장 위치도 고민\n"  
 }
 """
 
