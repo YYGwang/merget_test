@@ -21,8 +21,7 @@ class MemoAgent(BaseAgent):
 [출력 예시]
 {
   "title": "운동 메모",
-  "content": "- 운동 가야 함",
-  "keywords": ["운동"]
+  "content": "- 운동 가야 함"
 }
 """
 

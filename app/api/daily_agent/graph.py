@@ -1,4 +1,5 @@
 import re
+import json
 from typing import TypedDict, Literal, List, Any, Union
 from langgraph.graph import END, StateGraph
 from langgraph.checkpoint.memory import MemorySaver
@@ -28,6 +29,8 @@ class GraphState(TypedDict, total=False):
     refined_note: str
     title: str
     keywords: List[str]
+    triples: List[dict]
+    abstract: str
     user_decision: str
 
 
@@ -129,6 +132,78 @@ def cleaner_node(state: GraphState):
 
 
 # -----------------------------
+# 3-2) keyword, triple, abstract 추출
+# -----------------------------
+def key_triple_node(state: GraphState):
+    model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+    system_prompt = """
+You are an information extraction model for Korean planning, design, and any documents.
+
+You must follow a strict three-step process.
+
+STEP 1: Extract core keywords.
+STEP 2: Extract (head, relation, tail) triples using only those keywords.
+STEP 3: Generate an abstract using extracted keywords and triples.
+
+The output will be used for wordcloud visualization, knowledge graphs, and document summarization.
+
+Rules:
+- Output JSON only. No explanations.
+- The entire output must be written in Korean.
+- Final output format must be:
+{
+  "keywords": ["string"],
+  "triples": [
+    {"head": "string", "relation": "string", "tail": "string"}
+  ],
+  "abstract": "string"
+}
+
+STEP 1 (Keyword Extraction):
+- Extract nouns or named entities only.
+- No particles, verbs, adjectives, clauses, or sentences.
+- Must be standalone keywords.
+- Remove vague words (unless part of a meaningful compound):
+  기능, 시스템, 서비스, 화면, 페이지, 것, 수, 경우, 관련, 연관
+- Keep meaningful compound nouns (e.g., "드래프트 노트", "유사도 검색").
+
+STEP 2 (Triple Extraction):
+- Head and tail MUST be selected from the keyword list from STEP 1.
+- Do not invent new head/tail terms.
+- Extract only statements explicitly grounded in the document (facts + proposals + requirements).
+- Relations must be written in Korean, concise, and not full sentences.
+- Omit unclear or low-quality triples.
+
+STEP 3 (Abstract Generation):
+- Generate a concise Korean abstract using ONLY the extracted keywords and triples.
+- The abstract must summarize the main purpose, structure, and technical content of the document.
+- Do NOT introduce new concepts, entities, or terms.
+- Use natural Korean sentences.
+- Reflect the relationships expressed in the triples.
+- Length: 2–4 sentences.
+
+Empty Output Rules:
+- If no valid keywords: {"keywords": [], "triples": [], "abstract": ""}
+- If keywords exist but no valid triples: {"keywords": [...], "triples": [], "abstract": ""}
+- Only generate abstract when both keywords and triples are non-empty.
+""".strip()
+
+    text = state.get("preprocessed_request") or state.get("user_request", "")
+    response = model.invoke([
+        SystemMessage(content=system_prompt),
+        HumanMessage(content=state["preprocessed_request"])
+    ])
+
+    res = json.loads((response.content or "").strip())
+
+    return {
+        "keywords": res.get("keywords", []),
+        "triples": res.get("triples", []),
+        "abstract": res.get("abstract", "")
+    }
+
+# -----------------------------
 # 4) Router & Agent Nodes (기존 유지하되 is_short 제거)
 # -----------------------------
 import tiktoken
@@ -174,25 +249,25 @@ def router_node(state: GraphState):
 def meeting_node(state: GraphState):
     text = state["preprocessed_request"]
     result = MeetingAgent().organize(text, category="meeting")  # is_short 제거
-    return {"title": result["title"], "refined_note": result["content"], "keywords": result["keywords"]}
+    return {"title": result["title"], "refined_note": result["content"]}
 
 
 def note_node(state: GraphState):
     text = state["preprocessed_request"]
     result = NoteAgent().organize(text, category="note")
-    return {"title": result["title"], "refined_note": result["content"], "keywords": result["keywords"]}
+    return {"title": result["title"], "refined_note": result["content"]}
 
 
 def planner_node(state: GraphState):
     text = state["preprocessed_request"]
     result = PlannerAgent().organize(text, category="planner")
-    return {"title": result["title"], "refined_note": result["content"], "keywords": result["keywords"]}
+    return {"title": result["title"], "refined_note": result["content"]}
 
 
 def memo_node(state: GraphState):
     text = state["preprocessed_request"]
     result = MemoAgent().organize(text, category="memo")
-    return {"title": result["title"], "refined_note": result["content"], "keywords": result["keywords"]}
+    return {"title": result["title"], "refined_note": result["content"]}
 
 
 # -----------------------------
@@ -226,6 +301,8 @@ workflow.add_node("stt_parsing", stt_parsing_node)
 workflow.add_node("text_input", lambda state: {"user_request": state["user_request"]})
 
 workflow.add_node("cleaner", cleaner_node)
+workflow.add_node("key_triple_extractor", key_triple_node)
+
 workflow.add_node("router", router_node)
 workflow.add_node("meeting_agent", meeting_node)
 workflow.add_node("note_agent", note_node)
@@ -252,7 +329,8 @@ workflow.add_edge("ocr_parsing", "cleaner")
 workflow.add_edge("stt_parsing", "cleaner")
 workflow.add_edge("text_input", "cleaner")
 
-workflow.add_edge("cleaner", "router")
+workflow.add_edge("cleaner", "key_triple_extractor")
+workflow.add_edge("key_triple_extractor", "router")
 
 workflow.add_conditional_edges(
     "router",

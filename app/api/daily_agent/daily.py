@@ -1,9 +1,7 @@
-import time
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from app.core.security import verify_cognito_token
 from app.core.database import get_table
-import os
 import time
 from fastapi import File, UploadFile
 
@@ -46,6 +44,8 @@ async def create_daily_report(
         refined_note = final_state.get("refined_note", "정리 실패")
         refined_text = str(refined_note)
         extracted_keywords = final_state.get("keywords", [])
+        extracted_triples = final_state.get("triples", [])
+        extracted_abstract = final_state.get("abstract", "")
 
         # (선택) 디버깅용 - DB 저장은 안 하고 필요하면 응답에만 포함 가능
         category = final_state.get("category")
@@ -74,7 +74,9 @@ async def create_daily_report(
             "creation_date": current_unix_time,
             "title": refined_title,
             "content": refined_text,
-            "keywords": extracted_keywords
+            "keywords": extracted_keywords,
+            "triples": extracted_triples,
+            "abstract": extracted_abstract
         }
         DAILY_TABLE.put_item(Item=item_to_store)
 
