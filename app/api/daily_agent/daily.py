@@ -3,9 +3,13 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from app.core.security import verify_cognito_token
 from app.core.database import get_table
+import os
+import time
+from fastapi import File, UploadFile
 
 # 에이전트 및 그래프 관련
 from .graph import app_graph
+from .utils.pdfparser import PDFParser
 
 router = APIRouter()
 
@@ -45,7 +49,6 @@ async def create_daily_report(
 
         # (선택) 디버깅용 - DB 저장은 안 하고 필요하면 응답에만 포함 가능
         category = final_state.get("category")
-        is_short = final_state.get("is_short")
 
         # 3) 공통 타임스탬프 생성
         current_unix_time = int(time.time())
@@ -102,11 +105,6 @@ async def create_daily_report(
                 )
             except Exception as kw_e:
                 print(f"Keyword update failed for '{word}': {kw_e}")
-
-        # ✅ DB에는 기존 그대로 저장, 응답에는 디버깅 정보 옵션으로 포함
-        # (원치 않으면 아래 두 줄 삭제해도 됨)
-        item_to_store["category"] = category
-        item_to_store["is_short"] = is_short
 
         return item_to_store
 

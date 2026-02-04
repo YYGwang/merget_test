@@ -14,7 +14,7 @@ load_dotenv()
 class BaseAgent(ABC):
     def __init__(self):
         self.model = ChatOpenAI(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             temperature=0,
             openai_api_key=settings.OPENAI_API_KEY
         )
@@ -42,89 +42,6 @@ class BaseAgent(ABC):
         match = re.search(r"\{.*\}", cleaned, re.DOTALL)
         return match.group().strip() if match else cleaned
 
-    def _fallback_keywords(self, content: str, max_k: int = 8) -> list[str]:
-        if not content:
-            return []
-
-        tokens = re.findall(r"[A-Za-z0-9_]+|[가-힣]{2,}", content)
-
-        banned_suffixes = (
-            "합니다", "했습니다", "같습니다", "됩니다", "이다", "있다", "없다",
-            "하기", "하기를", "하기에",
-            "하는", "한", "할",
-            "으로", "로", "에서", "에게", "께", "보다",
-            "은", "는", "이", "가", "을", "를", "의", "와", "과", "도", "만"
-        )
-
-        stopwords = {
-            "것", "수", "때", "경우", "부분", "관련", "기능", "내용",
-            "문제", "방안", "제안", "정도", "사용"
-        }
-
-        seen = set()
-        out: list[str] = []
-
-        for t in tokens:
-            t = t.strip()
-            if len(t) < 2:
-                continue
-            if t.endswith(banned_suffixes):
-                continue
-            if t in stopwords:
-                continue
-            if t in seen:
-                continue
-
-            seen.add(t)
-            out.append(t)
-            if len(out) >= max_k:
-                break
-
-        return out
-
-    def _sanitize_title(self, title: str, original: str, is_short: bool) -> str:
-        title = (title or "").strip()
-        banned = [
-            "계획", "목표", "전략", "로드맵", "가이드", "보고서",
-            "정리본", "요약본", "매뉴얼", "문서", "분석", "리포트",
-            "플랜", "plan", "roadmap", "strategy", "report", "guide",
-        ]
-
-        if is_short:
-            for w in banned:
-                if w in title:
-                    title = title.replace(w, "").strip()
-
-            if len(title) < 4:
-                kws = self._fallback_keywords(original, max_k=4)
-                if kws:
-                    title = f"{', '.join(kws)} 메모" if len(kws) > 1 else f"{kws[0]} 메모"
-                else:
-                    title = "메모"
-
-            title = re.sub(r"\s{2,}", " ", title).strip()
-            title = title.strip(" -:·")
-            if len(title) > 60:
-                title = title[:60] + "…"
-
-        return title or "제목 미기재"
-
-    def _make_summary_from_content(self, content: str, max_sentences: int = 3) -> str:
-        heads = []
-        for line in (content or "").splitlines():
-            s = line.strip()
-            m = re.match(r"^(\d+)\.\s+(.+)$", s)
-            if m:
-                heads.append(m.group(2).strip())
-            if len(heads) >= max_sentences:
-                break
-
-        if not heads:
-            return "요약: 메모를 구조화하여 정리했다."
-
-        sentences = [f"{h}." if not h.endswith(".") else h for h in heads]
-        summary_text = " ".join(sentences[:max_sentences])
-        return f"요약: {summary_text}"
 
     def _normalize_md_hierarchy(self, text: str) -> str:
         """
@@ -165,88 +82,18 @@ class BaseAgent(ABC):
         text2 = re.sub(r"\n{3,}", "\n\n", text2).strip()
         return text2
 
-    def _postprocess(self, data: dict, original: str, is_short: bool) -> dict:
-        if not isinstance(data, dict):
-            data = {}
-
-        title = data.get("title") if isinstance(data.get("title"), str) else ""
-        content = data.get("content") if isinstance(data.get("content"), str) else ""
-        keywords = data.get("keywords") if isinstance(data.get("keywords"), list) else []
-
-        if not keywords:
-            keywords = []
-
-        title = self._sanitize_title(title, original=original, is_short=is_short)
-
-        # ✅ 여기서 포맷 통일(핵심)
-        content = self._normalize_md_hierarchy(content)
-
-        if (not is_short) and content:
-            if not content.lstrip().startswith("요약:"):
-                summary = self._make_summary_from_content(content, max_sentences=3)
-                content = f"{summary}\n\n{content}"
-
-            lines = content.splitlines()
-            if lines and (lines[0].strip().startswith("요약")):
-                summary_block = []
-                rest_block = []
-                in_summary = True
-                for ln in lines:
-                    if in_summary:
-                        summary_block.append(ln)
-                        if ln.strip() == "":
-                            in_summary = False
-                    else:
-                        rest_block.append(ln)
-
-                if len(summary_block) > 6:
-                    summary_block = summary_block[:6]
-                    if summary_block[-1].strip() != "":
-                        summary_block.append("")
-                    content = "\n".join(summary_block + rest_block)
-
-        return {
-            "title": title,
-            "content": content.strip() or original.strip(),
-            "keywords": keywords
-        }
 
     # -------------------------
     # Main
     # -------------------------
-    def organize(self, content: str, *, category: str, is_short: bool) -> dict:
+    def organize(self, content: str, *, category: str) -> dict:
         content = (content or "").strip()
-
-        short_mode_rules = ""
-        if is_short:
-            short_mode_rules = """
-[SHORT MODE — 정보가 부족한 짧은 입력 전용 규칙]
-- 입력에 없는 사실/정의/배경/예시/근거를 절대 추가하지 마세요.
-- 문단을 늘리거나 설명을 확장하지 마세요. (추출/재배치만 허용)
-- 템플릿의 항목이 비면 '미기재'로 두세요.
-- keywords는 반드시 입력에 등장한 단어에서만 추출하세요. (새 키워드 생성 금지)
-- title에 입력에 없는 목적/의도 단어(예: 계획, 목표, 전략, 로드맵, 가이드, 보고서)를 추가하지 마세요.
-"""
-
-        summary_rules = ""
-        if not is_short:
-            summary_rules = """
-[요약 규칙]
-- content의 맨 앞에 '요약:'으로 시작하는 요약 문단을 작성하세요.
-- 요약은 최대 3문장까지만 허용합니다.
-- 줄바꿈은 허용하되, bullet/번호/목록 형태는 사용하지 마세요.
-- 요약은 본문에 작성한 내용을 바탕으로만 작성하세요.
-- 입력에 없는 목적/의도 단어(계획/전략/로드맵/가이드/보고서 등)를 추가하지 마세요.
-"""
 
         system_prompt = f"""당신은 파편화된 메모를 단순 요약하는 사람이 아니라,
 내용을 재분류하고 구조를 새로 설계하는 "편집자(Structure Editor)"입니다.
 
 [현재 카테고리]
 - {category}
-
-{short_mode_rules}
-{summary_rules}
 
 [핵심 역할 규정]
 - 요약자가 아니라 편집자입니다.
@@ -264,14 +111,7 @@ class BaseAgent(ABC):
    - 비교/장단점/항목 나열이 본문에 이미 존재하는 경우
 5. 같은 줄에 여러 항목을 붙여 쓰지 말고, 줄바꿈을 지켜 가독성을 유지하세요.
 6. 입력에 없는 내용을 새로 만들지 마세요. (추측/상상 금지)
-
-
-[재구성 규칙]
-- 단편적인 문장은 맥락에 맞게 재배치하세요.
-- 중요 키워드, 주장, 관점은 독립된 번호 제목으로 분리하세요.
-- 판단, 비판, 한계, 비교가 등장하면 별도의 섹션으로 분리하세요.
-- **내용 보존**: 입력된 메모의 수치/라이브러리/고유명사/구체 사례는 가능한 한 보존하세요.
-  (단, SHORT MODE에서는 '보존'은 하되 '확장'은 금지)
+7. 절대 내용을 압축하지 마세요. 입력된 모든 기술적 세부 사항, 통계 수치($10^{26}$ FLOPS 등), 기업별 동향을 각각 독립된 섹션으로 구성하여 최대한 상세하게 기술하세요. 문서가 길어지더라도 모든 정보를 보존하는 것이 최우선 과제입니다.
 
 [표 사용 규칙]
 - 장단점, 비교, 분류, 대조 관계가 있는 경우 표 형태로 재구성하세요.
@@ -282,10 +122,29 @@ class BaseAgent(ABC):
 - 본문 핵심 대상(Who/What)이 드러나는 구체적 제목을 생성하세요.
 - title에 입력에 없는 목적/의도 단어(계획/전략/로드맵/가이드/보고서 등)를 새로 넣지 마세요.
 
-[키워드 추출 규칙]
-- 본문에 등장하는 핵심 개념/고유명사/기술 용어를 추출하세요.
-- 절대 형용사, 동사, 부사는 사용하지 마세요.
-- 명사만 사용하세요.
+[키워드 추출 규칙 — 위키/지식베이스용]
+    - keywords는 위키(지식베이스)에서 문서를 식별하고 연결하기 위한 태그입니다.
+    - 반드시 입력(content)에 실제로 등장한 표현에서만 추출하세요.
+    - 의역, 추론, 확장은 금지합니다.
+    - 키워드는 6~10개로 제한하세요.
+
+    [허용 키워드 유형]
+    - 고유명사: 인물, 국가, 조직, 회의체, 프로그램, 정책명
+    - 제도, 조치, 메커니즘
+    - 대상, 범위
+    - 기준, 임계치, 수치
+    
+    [금지 키워드 유형 — 절대 사용하지 말 것]
+    - 가치, 원칙, 상태를 나타내는 추상 명사
+    - 의미 범위가 지나치게 넓은 일반 명사
+    - 형용사, 동사, 부사 및 그 파생형
+    - 문서 전반에 보편적으로 적용되는 일반 개념
+    
+    [출력 규칙]
+    - 조사나 어미가 붙지 않은 기본형 명사로만 출력하세요.
+    - 최종 출력 전에 각 키워드가 본문에 실제로 존재하는지 자체 점검하세요.
+    - 본문에 존재하지 않는 키워드는 제거하세요.
+
 
 [금지 사항]
 - 설명/해설/주석을 절대 출력하지 마세요. 오직 JSON만 출력하세요.
@@ -319,15 +178,15 @@ class BaseAgent(ABC):
             res_content = (response.content or "").strip()
             json_str = self._extract_json_block(res_content)
             parsed = json.loads(json_str)
-            return self._postprocess(parsed, original=content, is_short=is_short)
+
+            # 후처리 없이 바로 반환
+            return parsed
+
         except Exception as e:
             print(f"JSON Parsing Error: {e}")
-            return self._postprocess(
-                {
-                    "title": "파싱 실패(원문 기반)",
-                    "content": content,
-                    "keywords": []
-                },
-                original=content,
-                is_short=is_short
-            )
+            # 에러 발생 시 최소한의 구조만 맞춰서 반환
+            return {
+                "title": "파싱 실패(원문 기반)",
+                "content": content,
+                "keywords": []
+            }
