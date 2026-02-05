@@ -1,58 +1,36 @@
-from ..base import BaseAgent
+from app.api.daily_agent.base import BaseAgent
 
-
+# 긴 문장
 class NoteAgent(BaseAgent):
-    def get_instruction(self) -> str:
-        return """
-- 목적: 입력 메모를 '노트(note)' 형식의 마크다운 문서로 구조화합니다.
-- 입력에 없는 배경지식/정의/예시/근거를 새로 만들지 마세요. (추측/확장 금지)
+    def get_system_prompt(self) -> str:
+        system_prompt = """
+You are a “Data-Preserving Editor” who systematically organizes every piece of information from the original text without missing a single sentence.
+Your goal is to “organize” the content into a highly readable Markdown format without summarizing or omitting any information.
+All output must be written in Korean.
 
-[핵심 원칙 — 요약 금지/보존 우선]
-- 원문 내용을 요약/압축/재서술하거나 대표 어절로 축약하지 마세요.
-- 원문에 등장한 문장·불릿·나열 표현을 가능한 한 그대로 유지하세요.
-- 허용되는 변경은 줄바꿈, 들여쓰기, 계층 구조 정리, 중복 항목 병합(동일 의미 반복)뿐입니다.
-- 정보가 부족하면 '미기재'로 표기하세요.
+[Mandatory Principles]
+1. Information Preservation
+   Include all facts, numbers, opinions, and detailed descriptions from the original text without omission. Do not summarize.
+2. Data Extraction
+   First extract core keywords, triples, and an abstract from the original text, and then use them as the backbone when creating the final_markdown.
+3. Title Extraction
+   Extract an appropriate title that represents the overall content of the document.
+   The title must be written as a single complete sentence in Korean.
 
-[구조 규칙]
-- 상위 주제는 번호로 작성: 1., 2., 3. (필요한 만큼)
-- 상위 주제 아래 소주제는 괄호 번호로 작성: (1), (2), (3)
-- 소주제 아래에는 원문 표현을 그대로 유지해 정리하되, 아래 원칙을 따르세요:
-  - 원문이 문장형이면 문장형 그대로 유지
-  - 원문이 목록형이면 목록형(-)을 유지
-  - 원문에 하위 항목이 있으면 계층(- 들여쓰기)으로만 분리
+Based on the input corrected text, output the following elements in JSON format:
+1. keywords: Core topic keywords of the document
+2. triples: Core relationships in the form [Head, Relation, Tail]
+3. abstract: An overall summary that conveys the flow of the original text
+4. title: A single-sentence Korean title representing the document
+5. final_markdown: The final organized Markdown body that arranges all content in context
 
-[순서 규칙]
-- 입력에 등장한 큰 흐름(섹션/주제 순서)을 가능한 한 유지하세요.
-- 불필요한 재배치는 하지 말고, 같은 내용의 중복만 가까운 위치에서 병합하세요.
-"""
+[Format Guidelines]
+* This is a document written for learning or record-keeping purposes.
+* Structure: Write in the order of ## Overview, ## Details (separated by topics), ## Key Summary.
+* Format: Use only context-appropriate Markdown headers (##), lists (-), and emphasis (**).
+* Style: Use logical and descriptive sentences, and clearly define the hierarchy of information.
 
-    def get_few_shot(self) -> str:
-        return """
-[입력 예시]
-"JWT 만료 처리 헷갈림. refresh token 필요 이유 정리해야 함. access token 만료 시 재발급 흐름 정리 필요. refresh token 저장 위치도 고민."
+You must respond strictly in valid JSON format, and all content must be written in Korean.
+            """
 
-[출력 예시]
-{
-  "title": "JWT 만료 처리와 Refresh Token 관련 메모",
-  "content": "1. JWT 만료 처리\n(1) 혼동 지점\n- JWT 만료 처리 헷갈림\n- access token 만료 시 재발급 흐름 정리 필요\n\n2. Refresh Token\n(1) 필요 이유\n- refresh token 필요 이유 정리해야 함\n\n(2) 구현/저장 관련\n- refresh token 저장 위치도 고민\n"  
-}
-"""
-
-    def get_template(self) -> str:
-        return """
-## {섹션/주제 제목} ({날짜 또는 미기재})
-
-1. {대주제}
-(1) {소주제}
-{원문에 등장한 문장·불릿·표현을 가능한 한 그대로 유지하여,
-줄바꿈과 계층 구조만 정리}
-
-- {원문이 목록 형태라면 원문 순서를 유지해 그대로 옮김}
-  - {원문에 하위 항목이 있으면 계층만 분리}
-
-(2) {소주제}
-{원문 표현을 요약하거나 재작성하지 말고,
-원문에 있는 표현을 그대로 유지해 구조만 정리}
-
----
-"""
+        return system_prompt
