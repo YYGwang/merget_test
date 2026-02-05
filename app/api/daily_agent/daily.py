@@ -35,7 +35,7 @@ async def create_daily_report(
         # ✅ 변경: GraphState에 없는 iteration_count/reflection_feedback 제거
         config = {"configurable": {"thread_id": uid}}
         final_state = app_graph.invoke(
-            {"user_request": request.content},
+            {"user_request": request.content },
             config
         )
 
@@ -44,7 +44,8 @@ async def create_daily_report(
         refined_note = final_state.get("refined_note", "정리 실패")
         refined_text = str(refined_note)
         extracted_keywords = final_state.get("keywords", [])
-        extracted_triples = final_state.get("triples", [])
+        triples = final_state.get("triples", [])
+        extracted_triples = [t.model_dump() for t in triples]
         extracted_abstract = final_state.get("abstract", "")
 
         # (선택) 디버깅용 - DB 저장은 안 하고 필요하면 응답에만 포함 가능
