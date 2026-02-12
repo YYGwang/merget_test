@@ -16,6 +16,7 @@ ORIGIN_TABLE = get_table("origin_table")
 PRE_TABLE = get_table("pre_table")
 DAILY_TABLE = get_table("daily_table")
 KEYWORD_TABLE = get_table("keyword_table")  # 키워드 통계용 테이블
+TRIPLE_TABLE = get_table("triple_table")    # triple 저장용 테이블
 
 
 class DailyNoteRequest(BaseModel):
@@ -81,7 +82,12 @@ async def create_daily_report(
         }
         DAILY_TABLE.put_item(Item=item_to_store)
 
-        # 7) [Keyword Table] 키워드별 통계 업데이트 (Upsert)
+        # 7 [Triple Table] 트리플 테이블에 신규 트리플 저장
+        TRIPLE_TABLE.put_item(Item={"user_key": uid,
+                                    "creation_date": current_unix_time,
+                                    "triples": extracted_triples})
+
+        # 8) [Keyword Table] 키워드별 통계 업데이트 (Upsert)
         for word in extracted_keywords:
             try:
                 KEYWORD_TABLE.update_item(
