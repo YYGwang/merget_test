@@ -61,7 +61,8 @@ async def create_daily_report(
             {
                 "input_type": request.input_type,
                 "content": request.content,
-                "s3_url": request.content if request.input_type != "text" else None
+                # "s3_url": request.content if request.input_type != "text" else None,
+                "user_key":uid
             },
             config
         )

@@ -20,13 +20,14 @@ from app.models.structed_output_model import Triple, CleanerNodeOutputStructure
 import boto3
 from urllib.parse import urlparse
 
-
+from botocore.exceptions import NoCredentialsError, ClientError
 # -----------------------------
 # 1) Graph State (수정됨)
 # -----------------------------
 class GraphState(TypedDict, total=False):
     input_type: Literal["text", "file", "image", "audio"]  # 입력 타입 라벨
     content: str  # text or s3_url
+    user_key: str
     file_path: str
     user_request: Union[str, List[str]]  # 추출된 원본 텍스트 (단일 또는 청크)
     preprocessed_request: str  # 정제된 텍스트
@@ -47,15 +48,57 @@ class GraphState(TypedDict, total=False):
 s3_client = boto3.client('s3')
 
 
-def download_from_s3(s3_url: str) -> str:
-    """S3 URL을 해석하여 로컬 /tmp에 다운로드 후 경로 반환"""
-    parsed = urlparse(s3_url)
-    bucket = parsed.netloc.split('.')[0]
-    key = parsed.path.lstrip('/')
-    local_path = os.path.join("/tmp", os.path.basename(key))
+# def download_from_s3(s3_url: str) -> str:
+#     """S3 URL을 해석하여 로컬 /tmp에 다운로드 후 경로 반환"""
+#     parsed = urlparse(s3_url)
+#     bucket = parsed.netloc.split('.')[0]
+#     key = parsed.path.lstrip('/')
+#     local_path = os.path.join("/tmp", os.path.basename(key))
+#
+#     s3_client.download_file(bucket, key, local_path)
+#     return local_path
 
-    s3_client.download_file(bucket, key, local_path)
-    return local_path
+
+
+def download_from_s3(user_key, file_name):
+    """
+    noton-storage 버킷에서 특정 사용자의 파일을 다운로드합니다.
+
+    :param user_key: 사용자 식별 키
+    :param file_name: S3에 저장된 파일 이름
+    """
+    bucket_name = "noton-storage"
+    # S3 내의 전체 경로 (Key) 구성
+    s3_key = f"private/{user_key}/{file_name}"
+    local_path = os.path.join("/tmp", os.path.basename(file_name))
+
+
+    # S3 클라이언트 생성 (EC2 IAM 역할을 통해 자동 인증)
+    s3 = boto3.client('s3')
+
+    try:
+        print(f"Downloading {s3_key} from bucket {bucket_name}...")
+        s3.download_file(bucket_name, s3_key, local_path)
+        print(f"Successfully downloaded to: {local_path}")
+        return local_path
+
+    except ClientError as e:
+        if e.response['Error']['Code'] == "404":
+            print("The object does not exist.")
+        else:
+            print(f"An error occurred: {e}")
+        return False
+    except NoCredentialsError:
+        print("Credentials not available. Please check your IAM Role.")
+        return False
+
+
+# 사용 예시
+# download_from_noton_storage("user123", "report.pdf")
+
+
+
+
 
 
 # --- GraphState에 file_path가 이미 정의되어 있다고 가정 ---
