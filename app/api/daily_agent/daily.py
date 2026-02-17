@@ -57,11 +57,10 @@ async def create_daily_report(
         # 1) AI 에이전트 실행
         # ✅ 변경: GraphState에 없는 iteration_count/reflection_feedback 제거
         config = {"configurable": {"thread_id": uid}}
-        final_state = app_graph.invoke(
+        final_state = await app_graph.ainvoke(
             {
                 "input_type": request.input_type,
                 "content": request.content,
-                # "s3_url": request.content if request.input_type != "text" else None,
                 "user_key":uid
             },
             config
@@ -84,8 +83,9 @@ async def create_daily_report(
 
         # 2) 파일인 경우 S3 이동 처리 (추가된 부분)
         final_content_url = request.content
-        if request.input_type in ["file", "image", "audio"]:
-            final_content_url = move_s3_file(request.content, uid, current_unix_time)
+        # if request.input_type in ["file", "image", "audio"]:
+        #    final_content_url = move_s3_file(request.content, uid, current_unix_time)
+
 
         # 3) 서버에 생성된 임시 로컬 파일 삭제 (서버 용량 관리)
         # graph.py의 각 노드가 반환한 'file_path'를 사용하여 삭제합니다.

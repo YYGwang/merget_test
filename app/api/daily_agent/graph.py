@@ -105,11 +105,12 @@ def download_from_s3(user_key, file_name):
 
 def file_parsing_node(state: GraphState):
     """PDF 및 Word 파일 통합 파싱"""
+    user_key = state.get("user_key")
     s3_url = state.get("content")  # 프론트에서 준 S3 URL
     if not s3_url: return {"user_request": "S3 URL 없음"}
 
     # 1. S3에서 로컬 /tmp로 다운로드
-    local_path = download_from_s3(s3_url)
+    local_path = download_from_s3(user_key, s3_url)
 
     # 2. 다운로드된 로컬 경로의 확장자 확인
     ext = local_path.split('.')[-1].lower()
@@ -128,11 +129,12 @@ def file_parsing_node(state: GraphState):
 
 async def ocr_parsing_node(state: GraphState) -> dict:
     """이미지 노드: OCR 실행"""
+    user_key = state.get("user_key")
     s3_url = state.get("content")
     if not s3_url: return {"user_request": ""}
 
     # S3 다운로드
-    local_path = download_from_s3(s3_url)
+    local_path = download_from_s3(user_key, s3_url)
 
     parser = OCRParser()
     # 단일 파일이므로 리스트로 감싸서 전달
@@ -150,8 +152,9 @@ async def ocr_parsing_node(state: GraphState) -> dict:
 
 def stt_parsing_node(state: GraphState):
     """음성 노드: STT 실행"""
+    user_key = state.get("user_key")
     s3_url = state.get("content")
-    local_path = download_from_s3(s3_url)
+    local_path = download_from_s3(user_key, s3_url)
 
     parser = STTParser()
     result = parser.transcribe(local_path)  # 로컬 경로 전달
