@@ -29,6 +29,7 @@ TRIPLE_TABLE = get_table("triple_table")    # triple 저장용 테이블
 class DailyNoteRequest(BaseModel):
     input_type: str  # text, file, image, audio
     content: str
+    dummy_date: int
 
 
 def move_s3_file(s3_url: str, user_key: str, creation_date: int):
@@ -79,7 +80,8 @@ async def create_daily_report(
         category = final_state.get("category")
 
         # 3) 공통 타임스탬프 생성
-        current_unix_time = int(time.time())
+        current_unix_time = int(time.time()) if request.dummy_date == 0 else request.dummy_date
+
 
         # 2) 파일인 경우 S3 이동 처리 (추가된 부분)
         final_content_url = request.content
