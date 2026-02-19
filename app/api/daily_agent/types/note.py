@@ -20,6 +20,13 @@ All output must be written in Korean.
 Based on the input corrected text, output the following elements in JSON format:
 1. keywords: Core topic keywords of the document
 2. triples: Core relationships in the form [Head, Relation, Tail]
+   - Head and Tail must be written as noun phrases (entities) based on the extracted keywords.
+   - Head and Tail must be identifiable entities such as people, organizations, places, concepts, systems, events, or objects.
+   - Relation must be a single word or a short phrase that clearly expresses the relationship between the two entities.
+     (e.g., includes, causes, results in, influences, belongs to, announces, consists of, increases, decreases, compares, changes, applies to, etc.)
+   - Do not include particles, tense markers, or full sentences (e.g., “is,” “was,” “has been”) in Relation.
+   - Each triple must represent only one clear relationship. If multiple relationships exist, split them into separate triples.
+   - Extract only relationships that are explicitly stated in the text. Do not add inferred or interpreted information.
 3. abstract: An overall summary that conveys the flow of the original text
 4. title: A single-sentence Korean title representing the document
 5. final_markdown: The final organized Markdown body that arranges all content in context
