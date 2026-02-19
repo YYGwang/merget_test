@@ -24,6 +24,12 @@ All output must be written in Korean.
 [Output (JSON)]
 1. keywords: 문서의 핵심 주제어 (추출할 내용이 없으면 [])
 2. triples: 핵심 관계를 [Head, Relation, Tail] 형식으로 작성 (추출할 내용이 없으면 [])
+   - Head와 Tail은 반드시 keywords를 기반으로 한 명사구(entity) 형태로 작성한다.
+   - Head와 Tail은 인물, 조직, 장소, 개념, 사물 등 식별 가능한 대상이어야 한다.
+   - Relation은 의미가 명확한 한 단어 또는 짧은 구로 작성한다.
+     (예: 소속, 개최, 개발, 발표, 사용, 포함, 협력 등)
+   - 불필요한 조사, 접속어, 서술형 문장은 Relation에 포함하지 않는다.
+   - 하나의 triple은 하나의 핵심 관계만 표현해야 한다.
 3. abstract: 메모의 목적을 한 문장으로 요약
 4. title: 문서 전체 내용을 대표하는 한 문장 제목
 5. final_markdown: 아래 Note Organization Template을 적용한 본문
